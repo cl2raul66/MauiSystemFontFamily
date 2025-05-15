@@ -30,47 +30,18 @@ jobs:
     - name: Pack
       run: dotnet pack MauiSystemFontFamily/MauiSystemFontFamily.csproj --configuration Release --no-build --output ./nuget-packages
 
-    - name: Get Package Name
-      id: get_package_name
+    - name: Check for nupkgs directory (Main)
+      if: always()
       run: |
-        PACKAGE_NAME=$(basename ./nuget-packages/*.nupkg .nupkg | sed -r 's/-[0-9]+(\.[0-9]+){2,3}//')
-        echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+        echo "Checking ./nuget-packages for Main:"
+        Test-Path ./nuget-packages
+        Get-ChildItem ./nuget-packages -Filter *.nupkg
+      shell: pwsh
 
-    - name: Get Package Version
-      id: get_package_version
+    - name: Publish Main Library to NuGet
       run: |
-        PACKAGE_VERSION=$(basename ./nuget-packages/*.nupkg .nupkg | sed -r "s/^${{ steps.get_package_name.outputs.PACKAGE_NAME }}-(.*)/\1/")
-        echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
-        echo "Package Version: $PACKAGE_VERSION"
-
-    - name: Upload NuGet package
-      uses: actions/upload-artifact@v4
-      with:
-        name: nuget
-        path: ./nuget-packages/*.nupkg
-
-  publish-nuget:
-    needs: build-and-pack
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' # Solo publica en push a main
-    environment:
-      name: NuGet # Opcional: si quieres usar entornos de GitHub para secrets
-      url: https://www.nuget.org/packages/${{needs.build-and-pack.outputs.package_name}}/${{needs.build-and-pack.outputs.package_version}}
-
-
-    steps:
-    - name: Download NuGet package
-      uses: actions/download-artifact@v4
-      with:
-        name: nuget
-        path: ./package
-
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '8.0.x'
-
-    - name: Publish to NuGet
-      run: dotnet nuget push ./package/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
-      env:
-        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }} 
+        Get-ChildItem -Path ./nuget-packages -Filter *.nupkg | ForEach-Object { 
+          Write-Host "Pushing package: $($_.FullName)"
+          dotnet nuget push $_.FullName --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+        }
+      shell: pwsh
