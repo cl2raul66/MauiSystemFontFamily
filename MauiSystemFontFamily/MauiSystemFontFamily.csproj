@@ -33,6 +33,14 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+	  <None Include="..\README.md">
+	    <Pack>True</Pack>
+	    <PackagePath>\</PackagePath>
+	  </None>
+	  <None Include="https:\github.com\cl2raul66\Designs\blob\8b70727b50877feb5e724c813725e0463ab5d7c5\MauiLogo\logo.png" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
 		<PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="$(MauiVersion)" />
 	</ItemGroup>
