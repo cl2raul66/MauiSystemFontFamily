@@ -20,7 +20,7 @@ jobs:
 
     - name: Install MAUI Workloads
       run: |
-        dotnet workload install maui --skip-manifest-update
+        dotnet workload install maui 
         # Si tienes dependencias específicas de Tizen que requieran su workload en tiempo de build (raro para una lib):
         # dotnet workload install tizen --skip-manifest-update
       # Para iOS/MacCatalyst en un runner macos-latest, podrías añadir:
