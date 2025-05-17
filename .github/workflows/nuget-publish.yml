@@ -3,15 +3,12 @@ name: Publish MauiSystemFontFamily to NuGet
 on:
   push:
     branches:
-      - main
+      - main # Se activa en push a la rama main
 
 jobs:
-  build-and-pack:
-    runs-on: ubuntu-latest
-    outputs:
-      package_name: ${{ steps.get_package_name.outputs.PACKAGE_NAME }}
-      package_version: ${{ steps.get_package_version.outputs.PACKAGE_VERSION }}
-
+  build-and-publish: # Un solo job para construir, empaquetar y publicar
+    runs-on: ubuntu-latest # O macos-latest si necesitas compilar específicamente para iOS/MacCatalyst targets en CI
+                           # Para una biblioteca, ubuntu-latest con 'maui' workload suele ser suficiente para empaquetar.
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -19,29 +16,46 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: '8.0.x'
+        dotnet-version: '8.0.x' # Asegúrate que coincide con la versión de tu proyecto
+
+    - name: Install MAUI Workloads
+      run: |
+        dotnet workload install maui --skip-manifest-update
+        # Si tienes dependencias específicas de Tizen que requieran su workload en tiempo de build (raro para una lib):
+        # dotnet workload install tizen --skip-manifest-update
+      # Para iOS/MacCatalyst en un runner macos-latest, podrías añadir:
+      # dotnet workload install maui-ios --skip-manifest-update
+      # dotnet workload install maui-maccatalyst --skip-manifest-update
+      # Para Windows en un runner windows-latest:
+      # dotnet workload install maui-windows --skip-manifest-update
 
     - name: Restore dependencies
       run: dotnet restore MauiSystemFontFamily/MauiSystemFontFamily.csproj
 
     - name: Build
       run: dotnet build MauiSystemFontFamily/MauiSystemFontFamily.csproj --configuration Release --no-restore
+      # Nota: En ubuntu-latest, los targets de iOS/MacCatalyst pueden ser omitidos o advertir,
+      # pero la compilación de las otras plataformas y el empaquetado general deberían funcionar.
 
     - name: Pack
       run: dotnet pack MauiSystemFontFamily/MauiSystemFontFamily.csproj --configuration Release --no-build --output ./nuget-packages
 
-    - name: Check for nupkgs directory (Main)
-      if: always()
+    - name: List created packages # Para depuración
+      if: always() # Se ejecuta incluso si los pasos anteriores fallan
       run: |
-        echo "Checking ./nuget-packages for Main:"
-        Test-Path ./nuget-packages
-        Get-ChildItem ./nuget-packages -Filter *.nupkg
-      shell: pwsh
+        echo "Checking ./nuget-packages directory contents:"
+        if [ -d "./nuget-packages" ]; then
+          ls -R ./nuget-packages
+        else
+          echo "./nuget-packages directory not found."
+        fi
 
-    - name: Publish Main Library to NuGet
+    - name: Publish to NuGet
+      # Usamos find y un bucle while para manejar correctamente nombres de archivo con espacios (aunque no es común para .nupkg)
       run: |
-        Get-ChildItem -Path ./nuget-packages -Filter *.nupkg | ForEach-Object { 
-          Write-Host "Pushing package: $($_.FullName)"
-          dotnet nuget push $_.FullName --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
-        }
-      shell: pwsh
+        find ./nuget-packages -name '*.nupkg' -print0 | while IFS= read -r -d $'\0' package_file; do
+          echo "Pushing package: $package_file"
+          dotnet nuget push "$package_file" --api-key "${{ secrets.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+        done
+      env:
+        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }} # Asegúrate de configurar este secret en tu repositorio
