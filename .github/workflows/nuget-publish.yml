@@ -1,61 +1,77 @@
-name: Publish MauiSystemFontFamily to NuGet
+name: Publish to NuGet
 
 on:
   push:
     branches:
-      - main # Se activa en push a la rama main
+      - main
 
 jobs:
-  build-and-publish: # Un solo job para construir, empaquetar y publicar
-    runs-on: ubuntu-latest # O macos-latest si necesitas compilar específicamente para iOS/MacCatalyst targets en CI
-                           # Para una biblioteca, ubuntu-latest con 'maui' workload suele ser suficiente para empaquetar.
+  build-and-publish:
+    runs-on: windows-latest 
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Setup .NET
+    - name: Setup .NET SDK
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: '8.0.x' # Asegúrate que coincide con la versión de tu proyecto
+        dotnet-version: '8.0.x'
+        
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Clear NuGet Caches
+      run: dotnet nuget locals all --clear
+      shell: pwsh 
 
     - name: Install MAUI Workloads
       run: |
-        dotnet workload install maui 
-        # Si tienes dependencias específicas de Tizen que requieran su workload en tiempo de build (raro para una lib):
-        # dotnet workload install tizen --skip-manifest-update
-      # Para iOS/MacCatalyst en un runner macos-latest, podrías añadir:
-      # dotnet workload install maui-ios --skip-manifest-update
-      # dotnet workload install maui-maccatalyst --skip-manifest-update
-      # Para Windows en un runner windows-latest:
-      # dotnet workload install maui-windows --skip-manifest-update
+        Write-Host "Installing .NET MAUI workloads..."
+        dotnet workload install maui --source https://api.nuget.org/v3/index.json
+      shell: pwsh
 
     - name: Restore dependencies
       run: dotnet restore MauiSystemFontFamily/MauiSystemFontFamily.csproj
+      shell: pwsh
+
+    - name: List NuGet Sources (for debugging)
+      if: always() 
+      run: dotnet nuget list source
+      shell: pwsh
 
     - name: Build
       run: dotnet build MauiSystemFontFamily/MauiSystemFontFamily.csproj --configuration Release --no-restore
-      # Nota: En ubuntu-latest, los targets de iOS/MacCatalyst pueden ser omitidos o advertir,
-      # pero la compilación de las otras plataformas y el empaquetado general deberían funcionar.
+      shell: pwsh
 
     - name: Pack
       run: dotnet pack MauiSystemFontFamily/MauiSystemFontFamily.csproj --configuration Release --no-build --output ./nuget-packages
+      shell: pwsh
 
-    - name: List created packages # Para depuración
-      if: always() # Se ejecuta incluso si los pasos anteriores fallan
+    - name: List created packages and validate
       run: |
-        echo "Checking ./nuget-packages directory contents:"
-        if [ -d "./nuget-packages" ]; then
-          ls -R ./nuget-packages
-        else
-          echo "./nuget-packages directory not found."
-        fi
+        $packagePath = "./nuget-packages"
+        Write-Host "Checking '$packagePath' directory contents:"
+        if (Test-Path $packagePath) {
+          $nuGetPackages = Get-ChildItem -Path $packagePath -Filter *.nupkg
+          if ($nuGetPackages.Count -gt 0) {
+            $nuGetPackages | ForEach-Object { Write-Host "Found package: $($_.FullName)" }
+          } else {
+            Write-Error "No .nupkg files found in '$packagePath'. Packing might have failed."
+            exit 1 # Fallar el step si no hay paquetes
+          }
+        } else {
+          Write-Error "'$packagePath' directory not found. Packing likely failed before this step."
+          exit 1 # Fallar el step
+        }
+      shell: pwsh
 
     - name: Publish to NuGet
-      # Usamos find y un bucle while para manejar correctamente nombres de archivo con espacios (aunque no es común para .nupkg)
       run: |
-        find ./nuget-packages -name '*.nupkg' -print0 | while IFS= read -r -d $'\0' package_file; do
-          echo "Pushing package: $package_file"
-          dotnet nuget push "$package_file" --api-key "${{ secrets.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
-        done
+        Get-ChildItem -Path ./nuget-packages -Filter *.nupkg | ForEach-Object {
+          Write-Host "Pushing package: $($_.FullName)"
+          dotnet nuget push $_.FullName --api-key "${{ secrets.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+        }
+      shell: pwsh
       env:
-        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }} # Asegúrate de configurar este secret en tu repositorio
+        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
