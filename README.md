@@ -1,6 +1,6 @@
 # MauiSystemFontFamily
 
-[![NuGet Version](https://img.shields.io/nuget/v/MauiSystemFontFamily.svg?style=flat-square)](https://www.nuget.org/packages/MauiSystemFontFamily/)
+[![NuGet Version](https://img.shields.io/nuget/v/RandAMediaLabGroup.MauiSystemFontFamily.svg?style=flat-square)](https://www.nuget.org/packages/RandAMediaLabGroup.MauiSystemFontFamily/)
 
 [![Build Status](https://github.com/cl2raul66/MauiSystemFontFamily/actions/workflows/nuget-publish.yml/badge.svg)](https://github.com/cl2raul66/MauiSystemFontFamily/actions/workflows/nuget-publish.yml)
 
